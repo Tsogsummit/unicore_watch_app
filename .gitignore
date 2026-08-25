@@ -1,0 +1,9 @@
+# Xcode / macOS gitignore
+xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+build/
+DerivedData/
+.DS_Store
+*.swp
+*~
