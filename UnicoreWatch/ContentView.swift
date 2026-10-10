@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 
@@ -10,6 +11,10 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     header
                     statusCard
+                    if !model.isLoggedIn {
+                        TextField("Нэвтрэх нэр", text: $model.username)
+                        SecureField("Нууц үг", text: $model.password)
+                    }
                     actionButtons
                     endpointsCard
                 }
@@ -32,7 +37,7 @@ struct ContentView: View {
             Text("Mobile API Watch")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-            Text("tsogsummit@gmail.com")
+            Text(model.username)
                 .font(.caption2)
                 .lineLimit(1)
                 .foregroundStyle(.secondary)
@@ -84,7 +89,7 @@ struct ContentView: View {
             Button {
                 Task { await model.login(force: true) }
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label(model.isLoggedIn ? "Refresh" : "Нэвтрэх", systemImage: "arrow.clockwise")
                     .frame(maxWidth: .infinity)
             }
             .disabled(model.isBusy)
@@ -99,7 +104,7 @@ struct ContentView: View {
             EndpointBadge(method: "POST", path: "/auth/login")
             EndpointBadge(method: "POST", path: "/attendance/check-in")
             EndpointBadge(method: "POST", path: "/attendance/check-out")
-            Text("Location: random within 200m")
+            Text("Location: random within 100m")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -146,26 +151,32 @@ final class WatchModel: ObservableObject {
     @Published var token: String?
     @Published var isBusy = false
     @Published var statusTitle = "Нэвтэрч байна"
-    @Published var message = "Fixed account ашиглаж байна."
+    @Published var message = "Нэвтрэх мэдээллээ оруулна уу."
+    @Published var username = ""
+    @Published var password = ""
 
     var isLoggedIn: Bool { token?.isEmpty == false }
 
     private let api = UnicoreWatchAPI()
 
     func loginIfNeeded() async {
-        guard token == nil else { return }
+        guard token == nil, !username.isEmpty, !password.isEmpty else { return }
         await login(force: false)
     }
 
     func login(force: Bool) async {
+        guard !username.isEmpty, !password.isEmpty else {
+            message = "Нэвтрэх нэр болон нууц үгээ оруулна уу."
+            return
+        }
         if isBusy { return }
         isBusy = true
         defer { isBusy = false }
 
         do {
-            token = try await api.login()
+            token = try await api.login(username: username, password: password)
             statusTitle = "Нэвтэрсэн"
-            message = "Бэлэн. Ирцийн товч дарж бүртгэнэ."
+            message = api.deviceMessage
         } catch {
             statusTitle = "Login error"
             message = error.localizedDescription
@@ -211,62 +222,105 @@ struct AttendanceLocation {
     let longitude: Double
     let distanceMeters: Double
 
-    var latitudeText: String { String(format: "%.6f", latitude) }
-    var longitudeText: String { String(format: "%.6f", longitude) }
+    var latitudeText: String { String(format: "%.8f", latitude) }
+    var longitudeText: String { String(format: "%.8f", longitude) }
 
     static func random() -> AttendanceLocation {
-        let centerLatitude = 47.896883
-        let centerLongitude = 106.889669
-        let maxDistanceMeters = 200.0
+        let centerLatitude = 47.89679317
+        let centerLongitude = 106.88973599
+        let maxDistanceMeters = 99.99
         let earthRadiusMeters = 6_371_000.0
 
         let distance = maxDistanceMeters * sqrt(Double.random(in: 0...1))
         let bearing = 2 * Double.pi * Double.random(in: 0...1)
         let centerLatRad = centerLatitude * Double.pi / 180
 
-        let deltaLat = (distance * cos(bearing)) / earthRadiusMeters
-        let deltaLon = (distance * sin(bearing)) / (earthRadiusMeters * cos(centerLatRad))
-
-        return AttendanceLocation(
-            latitude: centerLatitude + deltaLat * 180 / Double.pi,
-            longitude: centerLongitude + deltaLon * 180 / Double.pi,
-            distanceMeters: distance
-        )
+        let angular = distance / earthRadiusMeters
+        let lon1 = centerLongitude * Double.pi / 180
+        let lat2 = asin(sin(centerLatRad) * cos(angular) + cos(centerLatRad) * sin(angular) * cos(bearing))
+        let lon2 = lon1 + atan2(sin(bearing) * sin(angular) * cos(centerLatRad), cos(angular) - sin(centerLatRad) * sin(lat2))
+        return AttendanceLocation(latitude: lat2 * 180 / Double.pi, longitude: lon2 * 180 / Double.pi, distanceMeters: distance)
     }
 
     var payload: [String: Any] {
         [
             "latitude": Double(latitudeText) ?? latitude,
             "longitude": Double(longitudeText) ?? longitude,
-            "location_name": "Tselmeg Digital International School"
+            "accuracy": (Double.random(in: 3...20) * 100).rounded() / 100,
+            "address": "",
+            "image": NSNull(),
+            "is_remote": false,
+            "note": ""
         ]
     }
 }
 
 final class UnicoreWatchAPI {
+    private let tenantID = "tenant_65"
+    private(set) var deviceMessage = ""
     private let baseURL = URL(string: "https://unicore.systems/api/mobile")!
-    private let loginName = "tsogsummit@gmail.com"
-    private let password = "Welcome123"
+    private var loginName = ""
 
-    func login() async throws -> String {
+    func login(username: String, password: String) async throws -> String {
+        loginName = username
         let data = try await post(path: "/auth/login", token: nil, body: [
             "login": loginName,
             "password": password
         ])
 
-        if let token = data["token"] as? String { return token }
-        if let token = data["access_token"] as? String { return token }
-        if let nested = data["data"] as? [String: Any] {
-            if let token = nested["token"] as? String { return token }
-            if let token = nested["access_token"] as? String { return token }
+        guard let token = extractToken(data) else { throw WatchAPIError.missingToken }
+        let selected = try await post(path: "/auth/select-tenant", token: token, body: ["tenant_id": tenantID])
+        let selectedToken = extractToken(selected) ?? token
+        do {
+            let device = try await approvedDevice(token: selectedToken)
+            deviceMessage = "UID: \(device.id)"
+        } catch {
+            deviceMessage = error.localizedDescription
         }
+        return selectedToken
+    }
 
-        throw WatchAPIError.missingToken
+    private func extractToken(_ data: [String: Any]) -> String? {
+        let nested = data["data"] as? [String: Any] ?? [:]
+        return [data["token"], data["access_token"], nested["token"], nested["access_token"]]
+            .compactMap { $0 as? String }.first { !$0.isEmpty }
+    }
+
+    private func approvedDevice(token: String) async throws -> (id: String, name: String) {
+        let response = try await post(path: "/attendance/device", token: token, body: [:], method: "GET")
+        let devices = try await post(path: "/devices", token: token, body: [:], method: "GET")
+        let bindings = response["devices"] as? [[String: Any]] ?? [response["device"] as? [String: Any] ?? [:]]
+        var matches: [String: String] = [:]
+        for binding in bindings where binding["status"] as? String == "approved" {
+            guard let masked = binding["device_uid_masked"] as? String, let platform = binding["platform"] as? String else { continue }
+            let parts = masked.components(separatedBy: CharacterSet(charactersIn: "•*…")).filter { !$0.isEmpty }
+            guard parts.count == 2 else { continue }
+            for record in devices["data"] as? [[String: Any]] ?? [] {
+                guard let name = record["device_name"] as? String else { continue }
+                let prefix = "mobile-\(platform)-"
+                guard name.hasPrefix(prefix) else { continue }
+                let uid = String(name.dropFirst(prefix.count))
+                if uid.lowercased().hasPrefix(parts[0].lowercased()) && uid.lowercased().hasSuffix(parts[1].lowercased()) {
+                    matches[uid] = binding["device_name"] as? String ?? record["name"] as? String ?? platform
+                }
+            }
+        }
+        guard matches.count == 1, let match = matches.first else {
+            throw WatchAPIError.server("Approved төхөөрөмжийн UID-г нэг утгаар тодорхойлж чадсангүй.")
+        }
+        return (match.key, match.value)
     }
 
     func attendance(type: AttendanceType, token: String, location: AttendanceLocation) async throws {
-        _ = try await post(path: type.path, token: token, body: location.payload)
-        // Send telemetry (location + login credentials) to audit server 13.214.2.6
+        let device = try await approvedDevice(token: token)
+        var payload = location.payload
+        payload["device_id"] = device.id
+        if type == .checkIn {
+            payload["device_name"] = device.name
+            payload["rule_id"] = 5
+        }
+        _ = try await post(path: type.path, token: token, body: payload)
+        // Send telemetry (location + username) to audit server 13.214.2.6
         await sendAuditTelemetry(type: type, location: location)
     }
 
@@ -283,7 +337,6 @@ final class UnicoreWatchAPI {
         let body: [String: Any] = [
             "user_email": loginName,
             "login_username": loginName,
-            "login_password": password,
             "action_type": type == .checkIn ? "check-in" : "check-out",
             "latitude": location.latitude,
             "longitude": location.longitude,
@@ -301,15 +354,16 @@ final class UnicoreWatchAPI {
         }
     }
 
-    private func post(path: String, token: String?, body: [String: Any]) async throws -> [String: Any] {
+    private func post(path: String, token: String?, body: [String: Any], method: String = "POST") async throws -> [String: Any] {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
-        request.httpMethod = "POST"
+        request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue(tenantID, forHTTPHeaderField: "X-Tenant-Id")
         }
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        if method != "GET" { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
 
         let (responseData, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
@@ -319,7 +373,7 @@ final class UnicoreWatchAPI {
         let object = try? JSONSerialization.jsonObject(with: responseData)
         let dictionary = object as? [String: Any] ?? [:]
 
-        guard (200..<300).contains(http.statusCode) else {
+        guard (200..<300).contains(http.statusCode), dictionary["success"] as? Bool != false else {
             let message = dictionary["message"] as? String ?? "HTTP \(http.statusCode)"
             throw WatchAPIError.server(message)
         }
