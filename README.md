@@ -1,13 +1,14 @@
-# Unicore Watch
+# Unicore Watch 4.0
 
-## Attendance API compatibility
+Standalone watchOS app. Enter credentials on the watch; tokens, device mapping and credentials are kept in Keychain. The paired Watch target remains in the `unicore_mobile_app` repository.
 
-Login selects `tenant_65` and uses a replacement token if returned. Authenticated requests include `Authorization: Bearer …` and `X-Tenant-Id: tenant_65`. Login also retrieves the approved attendance device by matching `/attendance/device` against `/devices`; an absent or ambiguous match is displayed and blocks attendance submission. The device is checked again before every submission.
+Uses the same 4.0 API implementation as mobile’s paired Watch: authenticated server device resolution, 30-day lookup sessions, cached bearer tokens, one refresh on HTTP 401, explicit login stages and errors, and HTTPS metadata audit logging to `13.214.2.6/admin`. Both attendance actions use actual GPS and verify the approved device before posting. Missing or ambiguous device mappings block attendance.
 
-Check-in and checkout send coordinates, `accuracy`, `address: ""`, `device_id`, `image: null`, `is_remote: false`, and `note: ""`. Check-in additionally sends `device_name` and `rule_id: 5`. HTTP errors and `success: false` are treated as failures.
+The UI stays readable on watchOS with a consistent light color scheme. Signing in and looking up devices never submits attendance; check-in/out require a button press. The separate server scheduler operates Wednesday–Friday with check-in 08:30–08:45 and checkout 16:15–16:30 (Asia/Ulaanbaatar).
 
-To match the configured server, coordinates are generated within 100 m of 47.89679317, 106.88973599, and accuracy is generated between 3 and 20 m. These values are synthetic, not GPS measurements. Empty-address acceptance has not been verified with a live attendance submission.
+```sh
+python3 test/run_watch_api_tests.py
+xcodebuild -project UnicoreWatch.xcodeproj -scheme UnicoreWatch -configuration Release -destination 'generic/platform=watchOS' CODE_SIGNING_ALLOWED=NO build
+```
 
-The server scheduler remains responsible for Wednesday–Friday check-in at 07:30–07:45 and checkout at 16:15–16:30, Asia/Ulaanbaatar. These apps submit only when their attendance buttons are pressed; they do not create a second scheduler. Server checkout eligibility, the five-minute gap, and early-departure rules still apply.
-
-Audit telemetry excludes passwords and tokens. The standalone Watch login has no hardcoded credentials; the mobile login no longer offers Remember me and removes older saved login preferences. The paired Watch in the mobile repository retains its existing secure credential-sync flow.
+Tests use isolated network and Keychain fixtures; no real attendance is submitted. Distribution signing and TestFlight publication still require access to the requested Apple Developer team. No credentials or signing secrets are committed.

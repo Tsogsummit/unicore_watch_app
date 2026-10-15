@@ -7,11 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		100000000000000000000013 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000005 /* CredentialStore.swift */; };
 		100000000000000000000011 /* UnicoreWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000001 /* UnicoreWatchApp.swift */; };
 		100000000000000000000012 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000002 /* ContentView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		100000000000000000000005 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
 		100000000000000000000001 /* UnicoreWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnicoreWatchApp.swift; sourceTree = "<group>"; };
 		100000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		100000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -43,6 +45,7 @@
 				100000000000000000000001 /* UnicoreWatchApp.swift */,
 				100000000000000000000002 /* ContentView.swift */,
 				100000000000000000000003 /* Info.plist */,
+				100000000000000000000005 /* CredentialStore.swift */,
 			);
 			path = UnicoreWatch;
 			sourceTree = "<group>";
@@ -125,6 +128,7 @@
 			files = (
 				100000000000000000000011 /* UnicoreWatchApp.swift in Sources */,
 				100000000000000000000012 /* ContentView.swift in Sources */,
+				100000000000000000000013 /* CredentialStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -248,7 +252,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 5VJS7CULFG;
 				ENABLE_PREVIEWS = YES;
@@ -258,7 +262,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 4.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = systems.unicore.watchapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -278,7 +282,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 5VJS7CULFG;
 				ENABLE_PREVIEWS = YES;
@@ -288,7 +292,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 4.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = systems.unicore.watchapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
